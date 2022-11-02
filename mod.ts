@@ -198,11 +198,21 @@ export async function build(options: BuildOptions): Promise<void> {
   createPackageJson();
   createNpmIgnore();
 
-  // install dependencies in order to prepare for checking TS diagnostics
-  log(`Running ${packageManager} install...`);
+  // add registry dependencies install
+  // publishConfig: {
+  //   registry: "http://localhost:4873",
+  // },
+  let npmArgs = ["install"];
+  if (options.package?.publishConfig?.registry) {
+    log(`${packageManager} registry ${options.package.publishConfig.registry}`);
+
+    npmArgs.push("--registry");
+    npmArgs.push(options.package.publishConfig.registry);
+  }
+
   const npmInstallPromise = runNpmCommand({
     bin: packageManager,
-    args: ["install"],
+    args: npmArgs,
     cwd: options.outDir,
   });
   if (options.typeCheck || options.declaration) {
@@ -238,10 +248,10 @@ export async function build(options: BuildOptions): Promise<void> {
       esModuleInterop: false,
       isolatedModules: options.compilerOptions?.isolatedModules ?? true,
       useDefineForClassFields: true,
-      experimentalDecorators: options.compilerOptions?.experimentalDecorators ??
-        true,
-      emitDecoratorMetadata: options.compilerOptions?.emitDecoratorMetadata ??
-        false,
+      experimentalDecorators:
+        options.compilerOptions?.experimentalDecorators ?? true,
+      emitDecoratorMetadata:
+        options.compilerOptions?.emitDecoratorMetadata ?? false,
       jsx: ts.JsxEmit.React,
       jsxFactory: "React.createElement",
       jsxFragmentFactory: "React.Fragment",
@@ -250,7 +260,7 @@ export async function build(options: BuildOptions): Promise<void> {
       moduleResolution: ts.ModuleResolutionKind.NodeJs,
       target: compilerScriptTarget,
       lib: libNamesToCompilerOption(
-        options.compilerOptions?.lib ?? getCompilerLibOption(scriptTarget),
+        options.compilerOptions?.lib ?? getCompilerLibOption(scriptTarget)
       ),
       allowSyntheticDefaultImports: true,
       importHelpers: options.compilerOptions?.importHelpers,
@@ -267,19 +277,17 @@ export async function build(options: BuildOptions): Promise<void> {
         path: transformOutput.main.entryPoints[i],
       }))
       .filter((p) => p.kind === "bin")
-      .map((p) => p.path),
+      .map((p) => p.path)
   );
 
-  for (
-    const outputFile of [
-      ...transformOutput.main.files,
-      ...transformOutput.test.files,
-    ]
-  ) {
+  for (const outputFile of [
+    ...transformOutput.main.files,
+    ...transformOutput.test.files,
+  ]) {
     const outputFilePath = path.join(
       options.outDir,
       "src",
-      outputFile.filePath,
+      outputFile.filePath
     );
     const outputFileText = binaryEntryPointPaths.has(outputFile.filePath)
       ? `#!/usr/bin/env node\n${outputFile.fileText}`
@@ -295,10 +303,10 @@ export async function build(options: BuildOptions): Promise<void> {
             `(See ${outputFile.filePath} ${tlaLocation.line + 1}:${
               tlaLocation.character + 1
             }). ` +
-            `Please re-organize your code to not use a top level await or only distribute an ES module by setting the 'scriptModule' build option to false.`,
+            `Please re-organize your code to not use a top level await or only distribute an ES module by setting the 'scriptModule' build option to false.`
         );
         throw new Error(
-          "Build failed due to top level await when creating CommonJS/UMD package.",
+          "Build failed due to top level await when creating CommonJS/UMD package."
         );
       }
     }
@@ -347,7 +355,7 @@ export async function build(options: BuildOptions): Promise<void> {
     emit();
     writeFile(
       path.join(esmOutDir, "package.json"),
-      `{\n  "type": "module"\n}\n`,
+      `{\n  "type": "module"\n}\n`
     );
   }
 
@@ -358,9 +366,10 @@ export async function build(options: BuildOptions): Promise<void> {
       declaration: false,
       esModuleInterop: true,
       outDir: scriptOutDir,
-      module: options.scriptModule === "umd"
-        ? ts.ModuleKind.UMD
-        : ts.ModuleKind.CommonJS,
+      module:
+        options.scriptModule === "umd"
+          ? ts.ModuleKind.UMD
+          : ts.ModuleKind.CommonJS,
     });
     program = project.createProgram();
     emit({
@@ -370,7 +379,7 @@ export async function build(options: BuildOptions): Promise<void> {
     });
     writeFile(
       path.join(scriptOutDir, "package.json"),
-      `{\n  "type": "commonjs"\n}\n`,
+      `{\n  "type": "commonjs"\n}\n`
     );
   }
 
@@ -409,7 +418,7 @@ export async function build(options: BuildOptions): Promise<void> {
       },
       undefined,
       opts?.onlyDtsFiles,
-      opts?.transformers,
+      opts?.transformers
     );
 
     if (emitResult.diagnostics.length > 0) {
@@ -432,7 +441,7 @@ export async function build(options: BuildOptions): Promise<void> {
     });
     writeFile(
       path.join(options.outDir, "package.json"),
-      JSON.stringify(packageJsonObj, undefined, 2),
+      JSON.stringify(packageJsonObj, undefined, 2)
     );
   }
 
@@ -453,10 +462,10 @@ export async function build(options: BuildOptions): Promise<void> {
       entryPoints: entryPoints.map((e) => e.path),
       testEntryPoints: options.test
         ? await glob({
-          pattern: getTestPattern(),
-          rootDir: options.rootTestDir ?? Deno.cwd(),
-          excludeDirs: [options.outDir],
-        })
+            pattern: getTestPattern(),
+            rootDir: options.rootTestDir ?? Deno.cwd(),
+            excludeDirs: [options.outDir],
+          })
         : [],
       shims,
       testShims,
@@ -475,29 +484,31 @@ export async function build(options: BuildOptions): Promise<void> {
   }
 
   function createTestLauncherScript() {
-    const denoTestShimPackage = getDependencyByName("@deno/shim-deno-test") ??
+    const denoTestShimPackage =
+      getDependencyByName("@deno/shim-deno-test") ??
       getDependencyByName("@deno/shim-deno");
     writeFile(
       path.join(options.outDir, "test_runner.js"),
       transformCodeToTarget(
         getTestRunnerCode({
-          denoTestShimPackageName: denoTestShimPackage == null
-            ? undefined
-            : denoTestShimPackage.name === "@deno/shim-deno"
-            ? "@deno/shim-deno/test-internals"
-            : denoTestShimPackage.name,
+          denoTestShimPackageName:
+            denoTestShimPackage == null
+              ? undefined
+              : denoTestShimPackage.name === "@deno/shim-deno"
+              ? "@deno/shim-deno/test-internals"
+              : denoTestShimPackage.name,
           testEntryPoints: transformOutput.test.entryPoints,
           includeEsModule: options.esModule !== false,
           includeScriptModule: options.scriptModule !== false,
         }),
-        compilerScriptTarget,
-      ),
+        compilerScriptTarget
+      )
     );
 
     function getDependencyByName(name: string) {
       return (
         transformOutput.test.dependencies.find((d) => d.name === name) ??
-          transformOutput.main.dependencies.find((d) => d.name === name)
+        transformOutput.main.dependencies.find((d) => d.name === name)
       );
     }
   }
@@ -508,7 +519,7 @@ export async function build(options: BuildOptions): Promise<void> {
     // * or ending with `_test.{ts, tsx, js, mjs, jsx}`
     return (
       options.testPattern ??
-        "**/{test.{ts,tsx,js,mjs,jsx},*.test.{ts,tsx,js,mjs,jsx},*_test.{ts,tsx,js,mjs,jsx}}"
+      "**/{test.{ts,tsx,js,mjs,jsx},*.test.{ts,tsx,js,mjs,jsx},*_test.{ts,tsx,js,mjs,jsx}}"
     );
   }
 }
